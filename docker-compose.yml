@@ -1,0 +1,9 @@
+version: '3'
+services:
+  firepower_to_servicenow:
+    build: "./"
+    container_name: firepower-to-servicenow
+    env_file: .env
+    ports:
+      - "${SYSLOG_PORT}:${SYSLOG_PORT}"
+    restart: on-failure
