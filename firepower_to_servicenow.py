@@ -49,9 +49,6 @@ class FirepowerSyslogHandler():
         # If we properly parsed the event, do stuff
         if parsed_event:
 
-            # Parse the current event time
-            current_event_time = datetime.strptime(parsed_event.group(7), "%a %b %d %H:%M:%S %Y %Z")
-
             # Store the parsed data into a dict
             event_json = {
                 "product": "Firepower",
@@ -62,8 +59,7 @@ class FirepowerSyslogHandler():
                 "event_details": f"{parsed_event.group(8)} event {parsed_event.group(4)} was detected by '{parsed_event.group(6)}'.",
                 "impact_level": parsed_event.group(5),
                 "sensor_name": parsed_event.group(6),
-                "timestamp": current_event_time,
-                "formatted_timestamp": current_event_time.strftime("%b %d, %Y %H:%M:%S UTC"),
+                "timestamp": parsed_event.group(7),
                 "classification": parsed_event.group(8),
                 "priority": parsed_event.group(9),
                 "protocol": parsed_event.group(10),
@@ -95,7 +91,7 @@ class FirepowerSyslogHandler():
             "category": "Network",
             "impact": 2,
             "urgency": 2,
-            "short_description": "Stealtwatch Cloud Alert: {}".format(event_json['description']),
+            "short_description": "Firepower Alert: {}".format(event_json['event_name']),
             "description": json.dumps(event_json, indent=4)
         }
 
@@ -138,9 +134,13 @@ class SyslogHandler(socketserver.BaseRequestHandler):
 if __name__ == "__main__":
 
     try:
-        server = socketserver.UDPServer(("0.0.0.0", int(os.getenv("SYSLOG_PORT"))), SyslogHandler)
+
+        syslog_port = int(os.getenv("SYSLOG_PORT"))
+
+        server = socketserver.UDPServer(("0.0.0.0", syslog_port), SyslogHandler)
+        print(f"Server listening on port {syslog_port}...")
         server.serve_forever()
     except (IOError, SystemExit):
         raise
     except KeyboardInterrupt:
-        print("Crtl+C Pressed. Shutting down.")
+        print("\nCrtl+C Pressed. Shutting down.")

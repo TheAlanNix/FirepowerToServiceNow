@@ -5,5 +5,5 @@ services:
     container_name: firepower-to-servicenow
     env_file: .env
     ports:
-      - "${SYSLOG_PORT}:${SYSLOG_PORT}"
+      - "${SYSLOG_PORT}:${SYSLOG_PORT}/udp"
     restart: on-failure
