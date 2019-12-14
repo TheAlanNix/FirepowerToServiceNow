@@ -1,9 +1,23 @@
 version: '3'
 services:
-  firepower_to_servicenow:
-    build: "./"
-    container_name: firepower-to-servicenow
+  event_listener:
+    build: ./listener
+    container_name: firepower_to_servicenow_listener
+    depends_on: 
+      - event_publisher
+      - event_queue
     env_file: .env
     ports:
       - "${SYSLOG_PORT}:${SYSLOG_PORT}/udp"
     restart: on-failure
+  event_publisher:
+    build: ./publisher
+    container_name: firepower_to_servicenow_publisher
+    depends_on: 
+      - event_queue
+    env_file: .env
+    restart: on-failure
+  event_queue:
+    container_name: firepower_to_servicenow_queue
+    image: "rabbitmq"
+    restart: always

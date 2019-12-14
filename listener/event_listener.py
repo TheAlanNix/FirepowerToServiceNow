@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-This module is used to import Firepower syslog events into ServiceNow
+This module is used to listen for Firepower syslog events, parse them, then place them in a RabbitMQ queue.
 """
 
 import json
@@ -10,7 +10,7 @@ import os
 import re
 import socketserver
 
-import requests
+import pika
 
 from datetime import datetime
 from dotenv import load_dotenv
@@ -23,14 +23,10 @@ class FirepowerSyslogHandler():
     A class to parse Firepower syslog events.
     """
 
-    __snow_tenant = None
-    __snow_username = None
-    __snow_password = None
+    __rabbit_mq_host = None
 
     def __init__(self):
-        self.__snow_tenant = os.getenv("SNOW_TENANT")
-        self.__snow_username = os.getenv("SNOW_USERNAME")
-        self.__snow_password = os.getenv("SNOW_PASSWORD")
+        self.__rabbit_mq_host = os.getenv("RABBIT_MQ_HOST")
 
     def _parse_event(self, data):
         """
@@ -76,32 +72,30 @@ class FirepowerSyslogHandler():
         else:
             return None
 
-    def _submit_to_snow(self, event_json):
+    def _queue_event(self, event_json):
         """
-        Submit the event to ServiceNow as an incident.
+        Place the parsed event on a RabbitMQ queue.
         """
 
-        # Build the ServiceNow API URL
-        snow_url = 'https://{}.service-now.com/api/now/table/incident'.format(self.__snow_tenant)
+        # Create RabbitMQ connection parameters
+        connection_parameters = pika.ConnectionParameters(host=self.__rabbit_mq_host)
 
-        # Specify headers for the ServiceNow POST request
-        headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        # Build the RabbitMQ connection
+        connection = pika.BlockingConnection(connection_parameters)
 
-        data = {
-            "category": "Network",
-            "impact": 2,
-            "urgency": 2,
-            "short_description": "Firepower Alert: {}".format(event_json['event_name']),
-            "description": json.dumps(event_json, indent=4)
-        }
+        # Get a channel for the RabbitMQ connection
+        channel = connection.channel()
 
-        # Send the data to ServiceNow
-        response = requests.post(snow_url, auth=(self.__snow_username, self.__snow_password), headers=headers, data=json.dumps(data))
+        # Declare a new queue for events
+        channel.queue_declare(queue="events")
 
-        # Print logging
-        print('Status:', response.status_code, 'Headers:', response.headers, 'Error Response:', response.json())
+        # Publish the event to RabbitMQ
+        channel.basic_publish(exchange="", routing_key="events", body=json.dumps(event_json))
 
-        return response.json()
+        print(f"Event publiished to queue.  Event details:\n{json.dumps(event_json, indent=4)}")
+
+        # Close the connection
+        connection.close()
 
 
 class SyslogHandler(socketserver.BaseRequestHandler):
@@ -128,7 +122,7 @@ class SyslogHandler(socketserver.BaseRequestHandler):
         if event_json:
 
             # Store the event
-            event_parser._submit_to_snow(event_json)
+            event_parser._queue_event(event_json)
 
 
 if __name__ == "__main__":
